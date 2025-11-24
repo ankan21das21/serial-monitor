@@ -1,62 +1,36 @@
-<!--
-rodent-bmi-index.html
-Single-file GitHub Pages web app for Arduino + HX711 Lee Index monitor.
-Features included:
-- Web Serial API to read weight (grams) from Arduino serial
-- Input for rodent length (cm) via keyboard
-- Lee Index calculation and history table (download CSV)
-- Lottie-based "science lab rat" animation (placeholder data included)
-  * The Lottie is controlled by Lee Index: scale / shape / color change
-  * Replace `animationData` with a full Lottie JSON (from LottieFiles) for a polished rat
-- Status indicator: Underweight / Fit / Obese
-- All client-side; ready to push to GitHub Pages (index.html)
-
-USAGE:
-1. Put this file in a repo and enable GitHub Pages (branch: main / docs folder).
-2. Open in Chrome (required for Web Serial API).
-3. Connect Arduino UNO R4 Minima, upload a sketch that prints weight in grams as a newline-terminated number.
-   Example Arduino serial output: "weight: 322.5\n"  or just "322.5\n"
-4. Click "Connect to Arduino" -> choose serial port -> data will stream.
-5. Enter length (cm) in the input and press Enter to compute Lee Index.
-
-Note: For production, swap the placeholder Lottie `animationData` with a proper Lottie JSON URL or file.
--->
-
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rodent Lee Index IoT - Web Serial + Lottie</title>
+  <title>Rodent Lee Index IoT</title>
   <style>
     :root{--bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--good:#16a34a;--bad:#ef4444;--warn:#f59e0b}
     html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071029 0%, #0b1220 100%);color:#e6eef8}
     .wrap{max-width:980px;margin:24px auto;padding:20px}
-    header{display:flex;gap:16px;align-items:center}
     h1{margin:0;font-size:20px}
     .card{background:rgba(255,255,255,0.03);padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6);}
-    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center}
     button{background:#0b1220;border:1px solid rgba(255,255,255,0.04);color:inherit;padding:8px 12px;border-radius:8px;cursor:pointer}
-    input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;width:100px}
     .grid{display:grid;grid-template-columns:380px 1fr;gap:16px;margin-top:16px}
     .left{display:flex;flex-direction:column;gap:12px}
-    .anim-box{height:320px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));}
-    .status{display:flex;gap:8px;align-items:center}
-    .dot{width:12px;height:12px;border-radius:50%}
+    .anim-box{height:320px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));overflow:hidden}
+    .small{font-size:12px;color:var(--muted)}
     .bmi-value{font-size:28px;font-weight:700}
     table{width:100%;border-collapse:collapse}
     th,td{padding:8px;border-bottom:1px dashed rgba(255,255,255,0.03);text-align:left;font-size:13px}
-    .actions{display:flex;gap:8px}
+    #ratAnim{width:260px;height:260px;object-fit:contain;transition:transform 220ms ease, opacity 220ms ease;}
     footer{color:var(--muted);font-size:13px;margin-top:18px}
-    .small{font-size:12px;color:var(--muted)}
+    .muted-note{color:var(--muted);font-size:12px;margin-top:8px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <header>
+    <header style="display:flex;gap:12px;align-items:center">
       <div>
-        <h1>Rodent Lee Index IoT — Web Serial + Lottie</h1>
-        <div class="small">Arduino UNO R4 Minima → HX711 → weight → browser reads serial</div>
+        <h1>Rodent Lee Index IoT</h1>
+        <div class="small">Arduino UNO R4 Minima → HX711 → web serial</div>
       </div>
     </header>
 
@@ -64,7 +38,7 @@ Note: For production, swap the placeholder Lottie `animationData` with a proper 
       <div class="controls">
         <button id="connectBtn">Connect to Arduino</button>
         <button id="disconnectBtn" disabled>Disconnect</button>
-        <div class="small">Raw weight read (g): <span id="rawWeight">—</span></div>
+        <div class="small">Raw weight (g): <strong id="rawWeight">—</strong></div>
         <div style="flex:1"></div>
         <label class="small">Length (cm): <input id="lengthInput" type="number" step="0.1" min="0" placeholder="eg. 12.5"></label>
         <button id="calcBtn">Calc Lee Index</button>
@@ -74,13 +48,14 @@ Note: For production, swap the placeholder Lottie `animationData` with a proper 
       <div class="grid">
         <div class="left">
           <div class="anim-box card" id="animationContainer">
-            <img id="ratAnim" src="rat_normal.gif" style="width:260px;height:260px;">
+            <!-- GIF will switch automatically -->
+            <img id="ratAnim" src="rat_normal.gif" alt="rat animation">
           </div>
 
           <div class="card" style="display:flex;justify-content:space-between;align-items:center">
             <div>
               <div class="small">Current Lee Index</div>
-              <div class="bmi-value" id="bmiDisplay">—</div>
+              <div class="bmi-value" id="leeDisplay">—</div>
               <div class="small">Status: <span id="statusText">—</span></div>
             </div>
             <div style="text-align:right">
@@ -101,168 +76,191 @@ Note: For production, swap the placeholder Lottie `animationData` with a proper 
 
           <div class="card" style="margin-top:12px">
             <div class="small">How Lee Index is computed:</div>
-            <div class="small">Lee Index = weight (kg) / (length (m))^2. We read weight in grams so convert to kg.</div>
-            <div class="small">Example thresholds (you can change in the code):</div>
+            <div class="small">Lee Index = (cube root of weight in grams) / (body length in cm) × 1000</div>
+            <div class="small">Default thresholds (edit in code):</div>
             <ul class="small">
-              <li>Underweight: Lee Index &lt; 18.5</li>
-              <li>Fit/Normal: 18.5 ≤ Lee Index &lt; 25</li>
-              <li>Obese: Lee Index ≥ 25</li>
+              <li>Underweight: Lee Index &lt; 310</li>
+              <li>Normal: 310 ≤ Lee Index ≤ 360</li>
+              <li>Obese: Lee Index &gt; 360</li>
             </ul>
+            <div class="muted-note">Open DevTools (F12) → Console if Connect fails — errors appear there.</div>
           </div>
         </div>
       </div>
 
       <footer>
-        Note: Web Serial only works on secure contexts (https) — GitHub Pages is fine. Use Chrome/Edge browsers. Replace the placeholder Lottie JSON with any lab-rat Lottie for a nicer look.
+        Note: Web Serial requires HTTPS (GitHub Pages) or localhost. Use Chrome/Edge.
       </footer>
     </div>
   </div>
 
-  <!-- Lottie library -->
-  
+<script>
+/* Elements */
+const connectBtn = document.getElementById('connectBtn');
+const disconnectBtn = document.getElementById('disconnectBtn');
+const rawWeightEl = document.getElementById('rawWeight');
+const weightDisplay = document.getElementById('weightDisplay');
+const leeDisplay = document.getElementById('leeDisplay');
+const statusText = document.getElementById('statusText');
+const lengthInput = document.getElementById('lengthInput');
+const calcBtn = document.getElementById('calcBtn');
+const historyTbody = document.querySelector('#historyTable tbody');
+const exportBtn = document.getElementById('exportBtn');
+const ratImg = document.getElementById('ratAnim');
 
-  <script>
-    /*******************************************************************
-     * Placeholder Lottie animationData
-     * This is a tiny hand-crafted Lottie-like object that draws a simple
-     * circle 'rat' body and a small ear; it is intentionally minimal so
-     * the file remains compact. For a polished rat, replace this object
-     * with a full Lottie JSON from LottieFiles and load via `lottie.loadAnimation({path: '...'})`.
-     ******************************************************************/
-    
+/* State */
+let port = null;
+let reader = null;
+let keepReading = false;
+let latestWeight = null; // grams
+const history = [];
 
-    // Serial reading: parse floats from serial text
-    async function connectSerial() {
-      try {
-        port = await navigator.serial.requestPort();
-        await port.open({baudRate: 115200});
-        connectBtn.disabled = true;
-        disconnectBtn.disabled = false;
-        keepReading = true;
-        const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-        reader = textDecoder.readable.getReader();
-        readLoop();
-      } catch (err) {
-        console.error('Serial connect error', err);
-        alert('Serial connect error: ' + err.message);
-      }
+/* Thresholds */
+const thresholds = { under: 310, over: 360 };
+
+/* Serial connect */
+async function connectSerial() {
+  try {
+    if (!('serial' in navigator)) {
+      alert('Web Serial API not available. Use Chrome or Edge.');
+      return;
     }
+    // request port
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    connectBtn.disabled = true;
+    disconnectBtn.disabled = false;
+    keepReading = true;
 
-    async function disconnectSerial() {
-      keepReading = false;
-      if (reader) { await reader.cancel(); reader = null; }
-      if (port) { await port.close(); port = null; }
-      connectBtn.disabled = false;
-      disconnectBtn.disabled = true;
-    }
+    // Setup decoding stream
+    const textDecoder = new TextDecoderStream();
+    port.readable.pipeTo(textDecoder.writable);
+    reader = textDecoder.readable.getReader();
 
-    async function readLoop() {
-      while (keepReading && reader) {
-        try {
-          const {value, done} = await reader.read();
-          if (done) break;
-          if (value) {
-            // try to find a float in the incoming chunk
-            const match = value.match(/(-?\d+\.?\d*)/);
-            if (match) {
-              const num = parseFloat(match[1]);
-              latestWeight = num; // assume grams
-              rawWeightEl.textContent = num.toFixed(2);
-              weightDisplay.textContent = num.toFixed(1) + ' g';
-            }
+    readLoop();
+  } catch (err) {
+    console.error('connectSerial error:', err);
+    alert('Could not open serial port: ' + (err && err.message ? err.message : err));
+  }
+}
+
+/* Serial disconnect */
+async function disconnectSerial() {
+  keepReading = false;
+  try {
+    if (reader) { await reader.cancel(); reader = null; }
+    if (port) { await port.close(); port = null; }
+  } catch (e) {
+    console.warn('disconnect error', e);
+  }
+  connectBtn.disabled = false;
+  disconnectBtn.disabled = true;
+}
+
+/* Read loop: accumulate chunks and extract numbers */
+async function readLoop() {
+  let buffer = '';
+  while (keepReading && reader) {
+    try {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) {
+        buffer += value;
+        // split by newline to process full lines
+        const parts = buffer.split(/\r?\n/);
+        buffer = parts.pop(); // last partial line remains
+        for (const line of parts) {
+          // try to extract a float from the line
+          const m = line.match(/(-?\d+\.?\d*)/);
+          if (m) {
+            const num = parseFloat(m[1]);
+            latestWeight = num;
+            rawWeightEl.textContent = num.toFixed(2);
+            weightDisplay.textContent = num.toFixed(1) + ' g';
           }
-        } catch (err) {
-          console.error('Read error', err); break;
         }
       }
+    } catch (err) {
+      console.error('readLoop error', err);
+      break;
     }
+  }
+}
 
-    connectBtn.addEventListener('click', connectSerial);
-    disconnectBtn.addEventListener('click', disconnectSerial);
+/* Attach events */
+connectBtn.addEventListener('click', connectSerial);
+disconnectBtn.addEventListener('click', disconnectSerial);
 
-    // Lee Index calculation
-    function computeLee(weightGrams, lengthCm) {
+/* Lee Index formula */
+function computeLee(weightGrams, lengthCm) {
   if (!weightGrams || !lengthCm) return null;
   const cube = Math.cbrt(weightGrams);
   return (cube / lengthCm) * 1000;
 }
 
-    
-function updateAnimationForLee(bmi){
-  const img=document.getElementById('ratAnim');
-  if(!img||!bmi) return;
-  if(bmi < 310) img.src='rat_thin.gif';
-  else if(bmi > 360) img.src='rat_fat.gif';
-  else img.src='rat_normal.gif';
+/* Update GIF based on Lee Index */
+function updateRatForLee(lee) {
+  if (lee === null || lee === undefined) return;
+  if (lee < thresholds.under) {
+    ratImg.src = 'rat_thin.gif';
+    ratImg.style.transform = 'scale(0.95)';
+  } else if (lee > thresholds.over) {
+    ratImg.src = 'rat_fat.gif';
+    ratImg.style.transform = 'scale(1.05)';
+  } else {
+    ratImg.src = 'rat_normal.gif';
+    ratImg.style.transform = 'scale(1)';
+  }
 }
-      if (tail) {
-        const g2 = tail.parentNode.parentNode;
-        if (g2) g2.setAttribute('transform', `translate(380,330) rotate(${tailRotation})`);
-      }
 
-      // subtle frame-based play speed change
-      if (anim.setSpeed) anim.setSpeed(Math.max(0.6, Math.min(1.6, scale)));
-    }
+/* History */
+function addHistoryEntry(weight, length, lee) {
+  const t = new Date();
+  const row = { time: t.toLocaleString(), weight: weight.toFixed(1), length: length.toFixed(1), lee: lee.toFixed(2) };
+  history.unshift(row);
+  renderHistory();
+}
+function renderHistory() {
+  historyTbody.innerHTML = '';
+  for (const r of history) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.time}</td><td>${r.weight}</td><td>${r.length}</td><td>${r.lee}</td>`;
+    historyTbody.appendChild(tr);
+  }
+}
 
-    function addHistoryEntry(weight, length, bmi) {
-      const t = new Date();
-      const row = {time:t.toLocaleString(),weight:weight.toFixed(1),length:length.toFixed(1),bmi:bmi.toFixed(2)};
-      history.unshift(row);
-      renderHistory();
-    }
+/* Calculate button */
+calcBtn.addEventListener('click', () => {
+  const length = parseFloat(lengthInput.value);
+  if (!latestWeight) { alert('No weight read yet from Arduino. Connect and ensure Arduino prints weight in grams.'); return; }
+  if (!length || length <= 0) { alert('Enter a valid length in cm'); return; }
+  const lee = computeLee(latestWeight, length);
+  if (!lee) { alert('Cannot compute Lee Index'); return; }
+  leeDisplay.textContent = lee.toFixed(2);
+  let status = '—';
+  if (lee < thresholds.under) status = 'Underweight';
+  else if (lee > thresholds.over) status = 'Obese';
+  else status = 'Normal';
+  statusText.textContent = status;
+  statusText.style.color = (status==='Underweight') ? '#60a5fa' : (status==='Obese') ? '#fb7185' : '#34d399';
+  updateRatForLee(lee);
+  addHistoryEntry(latestWeight, length, lee);
+});
 
-    function renderHistory() {
-      historyTbody.innerHTML = '';
-      for (const r of history) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.time}</td><td>${r.weight}</td><td>${r.length}</td><td>${r.bmi}</td>`;
-        historyTbody.appendChild(tr);
-      }
-    }
+/* Enter key triggers calc */
+lengthInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calcBtn.click(); });
 
-    calcBtn.addEventListener('click', ()=>{
-      const length = parseFloat(lengthInput.value);
-      if (!latestWeight) { alert('No weight read yet from Arduino. Connect and ensure Arduino prints weight in grams.'); return; }
-      if (!length || length <= 0) { alert('Enter a valid length in cm'); return; }
-      const bmi = computeLee(latestWeight, length);
-      if (!bmi) { alert('Cannot compute Lee Index'); return; }
-      bmiDisplay.textContent = bmi.toFixed(2);
-      // status
-      let status = '—';
-      if (bmi < thresholds.under) status = 'Underweight';
-      else if (bmi >= thresholds.over) status = 'Obese';
-      else status = 'Fit (Normal)';
-      statusText.textContent = status;
-      // color the status
-      if (status === 'Underweight') statusText.style.color = '#60a5fa';
-      else if (status === 'Obese') statusText.style.color = '#fb7185';
-      else statusText.style.color = '#34d399';
+/* Export CSV */
+exportBtn.addEventListener('click', () => {
+  if (history.length === 0) { alert('No history to export'); return; }
+  const csv = ['Time,Weight_g,Length_cm,LeeIndex', ...history.map(r => `${r.time},${r.weight},${r.length},${r.lee}`)].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'rodent_lee_history.csv'; a.click(); URL.revokeObjectURL(url);
+});
 
-      // update animation
-      updateAnimationForLee(bmi);
-
-      // add history
-      addHistoryEntry(latestWeight, length, bmi);
-    });
-
-    // allow Enter key on length input
-    lengthInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') calcBtn.click(); });
-
-    // Export CSV
-    exportBtn.addEventListener('click', ()=>{
-      if (history.length === 0) { alert('No history to export'); return; }
-      const csv = ['Time,Weight_g,Length_cm,Lee Index', ...history.map(r=>`${r.time},${r.weight},${r.length},${r.bmi}`)].join('\n');
-      const blob = new Blob([csv], {type:'text/csv'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'rodent_bmi_history.csv'; a.click(); URL.revokeObjectURL(url);
-    });
-
-    // Clean up on page unload
-    window.addEventListener('beforeunload', async ()=>{ if (port) { try{ await port.close(); }catch(e){} } });
-
-    // Small helper: if user supplies a real Lottie URL, they can replace this function to load from path
-    // Example: lottie.loadAnimation({container:lottieRoot, renderer:'svg', loop:true, autoplay:true, path:'path/to/rat.json'})
-  </script>
+/* Close port on unload */
+window.addEventListener('beforeunload', async () => { if (port) { try { await port.close(); } catch (e) {} } });
+</script>
 </body>
 </html>
