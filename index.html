@@ -202,13 +202,13 @@ function computeLee(weightGrams, lengthCm) {
 function updateRatForLee(lee) {
   if (lee === null || lee === undefined) return;
   if (lee < thresholds.under) {
-    ratImg.src = 'rat_thin.gif';
+    ratImg.src = 'rat_thin.jpeg';
     ratImg.style.transform = 'scale(0.95)';
   } else if (lee > thresholds.over) {
-    ratImg.src = 'rat_fat.gif';
+    ratImg.src = 'rat_fat.jpeg';
     ratImg.style.transform = 'scale(1.05)';
   } else {
-    ratImg.src = 'rat_normal.gif';
+    ratImg.src = 'rat_normal.jpeg';
     ratImg.style.transform = 'scale(1)';
   }
 }
@@ -264,3 +264,4 @@ window.addEventListener('beforeunload', async () => { if (port) { try { await po
 </script>
 </body>
 </html>
+
